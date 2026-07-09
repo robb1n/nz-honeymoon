@@ -409,8 +409,16 @@ function budgetContent() {
   DAYS.slice(1).filter(d=>d.id!==15).forEach(d => {
     d.locations.forEach(l => {
       if (!l.budget) return;
-      const num = parseFloat(l.budget.replace(/[^0-9.]/g,''));
-      if (!num) return;
+      // Handle ranges: "600-800" -> take midpoint 700
+      const clean = l.budget.replace(/[^0-9.\-]/g,'');
+      let num;
+      if (clean.includes('-')) {
+        const parts = clean.split('-').map(Number).filter(n => !isNaN(n));
+        num = parts.length ? (parts[0] + parts[parts.length-1]) / 2 : 0;
+      } else {
+        num = parseFloat(clean);
+      }
+      if (!num || isNaN(num)) return;
       let total = 0;
       if (l.budget.includes('/晚')) total = num;
       else if (l.budget.includes('/人')) total = num * 2;
