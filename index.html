@@ -211,6 +211,19 @@ a:hover { text-decoration: underline; }
 .pay-summary .warn { color: var(--tint-red); }
 .pay-summary .ok-text { color: var(--tint-green); }
 
+/* Budget table */
+.budget-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px; }
+.budget-table th { text-align: left; padding: 10px 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .02em; border-bottom: 1px solid var(--separator); }
+.budget-table td { padding: 10px 8px; border-bottom: .5px solid var(--separator); vertical-align: top; }
+.budget-table .item { font-weight: 600; }
+.budget-table .note { font-size: 12px; color: var(--text-secondary); }
+.budget-table .amt { text-align: right; font-weight: 600; white-space: nowrap; }
+.budget-table .sub { text-align: right; font-weight: 700; color: var(--accent); font-size: 15px; }
+.budget-table .total-row td { border-top: 2px solid var(--text-primary); border-bottom: none; font-weight: 700; font-size: 15px; }
+.budget-table .total-row .amt { font-size: 17px; color: var(--tint-red); }
+.budget-section { margin-top: 24px; }
+.budget-section h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; padding-left: 4px; }
+
 /* ── Legend ── */
 .legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 8px 0; font-size: 12px; color: var(--text-secondary); }
 .legend-item { display: flex; align-items: center; gap: 5px; }
@@ -339,7 +352,8 @@ const DAYS = [
       { name: '蒂卡波湖晨光', lat: -43.8826, lng: 170.5236, type: 'spot', time: '08:00', desc: '最后再感受一下湖光山色' },
       { name: '基督城机场 (CHC)', lat: -43.4892, lng: 172.5322, type: 'transport', time: '下午', desc: '还车·返程航班·完美旅程✨', budget: '¥100/人 油费' }
     ]
-  }
+  },
+  { id: 15, label: '账单', color: '#34c759', locations: [] }
 ];
 
 
@@ -357,7 +371,7 @@ function overviewContent() {
   <div class="info-card"><div class="label">预估费用</div><div class="value">约¥8-10万（两人）</div></div>
 </div>
 <div class="section-head">行程概览</div>
-<div class="day-list">${DAYS.slice(1).map(d=>`<div class="card" onclick="go(${d.id})"><div class="name"><span class="dot" style="background:${d.color}"></span>${d.label} · ${d.title}</div><div class="desc">${d.date}</div></div>`).join('')}</div>
+<div class="day-list">${DAYS.slice(1).filter(d=>d.id!==15).map(d=>`<div class="card" onclick="go(${d.id})"><div class="name"><span class="dot" style="background:${d.color}"></span>${d.label} · ${d.title}</div><div class="desc">${d.date}</div></div>`).join('')}</div>
 <div class="section-head">支付提醒</div>
 <div class="pay-summary">
   <h4>💳 支付信息</h4>
@@ -380,9 +394,103 @@ function overviewContent() {
 </div>`;
 }
 
+function budgetContent() {
+  // Helper: format price in CNY per person to total for two
+  const p = (pp, days=1, people=2) => {
+    if (!pp) return '—';
+    const num = parseFloat(pp.replace(/[^0-9.]/g,''));
+    if (pp.includes('/晚')) return (num * days * 1).toFixed(0);
+    if (pp.includes('/人')) return (num * people).toFixed(0);
+    return pp;
+  };
+  // Calculate totals from DAYS
+  let actTotal = 0, hotelTotal = 0, foodTotal = 0, transTotal = 0;
+  const rows = [];
+  DAYS.slice(1).filter(d=>d.id!==15).forEach(d => {
+    d.locations.forEach(l => {
+      if (!l.budget) return;
+      const num = parseFloat(l.budget.replace(/[^0-9.]/g,''));
+      if (!num) return;
+      let total = 0;
+      if (l.budget.includes('/晚')) total = num;
+      else if (l.budget.includes('/人')) total = num * 2;
+      else total = num;
+      if (l.type === 'hotel') hotelTotal += total;
+      else if (l.type === 'food') foodTotal += total;
+      else if (l.type === 'transport') transTotal += total;
+      else actTotal += total;
+      rows.push({ day: d.label, name: l.name, type: l.type, budget: l.budget, total });
+    });
+  });
+  
+  const flightEst = 16000;
+  const carEst = 22500;
+  const insurance = 1400;
+  const visaEst = 2200;
+  const miscEst = 3000;
+  const subEst = flightEst + carEst + insurance + visaEst + miscEst;
+  const grandTotal = subEst + hotelTotal + foodTotal + actTotal + transTotal;
+
+  return `
+<div class="hero"><h1>💰 费用明细</h1><p class="subtitle">按两人估算 · ¥计价 · 轻奢标准</p></div>
+
+<div class="budget-section"><h3>🏨 住宿</h3>
+<table class="budget-table">
+<tr><th>项目</th><th>单价</th><th class="amt">小计(¥)</th></tr>
+${rows.filter(r=>r.type==='hotel').map(r=>`<tr><td class="item">${r.day} ${r.name}</td><td class="note">${r.budget}</td><td class="amt">${r.total.toFixed(0)}</td></tr>`).join('')}
+<tr><td colspan="2" style="font-weight:700">住宿合计</td><td class="sub">${hotelTotal.toFixed(0)}</td></tr>
+</table></div>
+
+<div class="budget-section"><h3>🎯 活动 & 景点</h3>
+<table class="budget-table">
+<tr><th>项目</th><th>单价</th><th class="amt">小计(¥)</th></tr>
+${rows.filter(r=>r.type==='spot').map(r=>`<tr><td class="item">${r.day} ${r.name}</td><td class="note">${r.budget}</td><td class="amt">${r.total.toFixed(0)}</td></tr>`).join('')}
+<tr><td colspan="2" style="font-weight:700">活动合计</td><td class="sub">${actTotal.toFixed(0)}</td></tr>
+</table></div>
+
+<div class="budget-section"><h3>🍽️ 餐饮</h3>
+<table class="budget-table">
+<tr><th>项目</th><th>单价</th><th class="amt">小计(¥)</th></tr>
+${rows.filter(r=>r.type==='food').map(r=>`<tr><td class="item">${r.day} ${r.name}</td><td class="note">${r.budget}</td><td class="amt">${r.total.toFixed(0)}</td></tr>`).join('')}
+<tr><td colspan="2" style="font-weight:700">餐饮合计</td><td class="sub">${foodTotal.toFixed(0)}</td></tr>
+</table></div>
+
+<div class="budget-section"><h3>🚗 交通</h3>
+<table class="budget-table">
+<tr><th>项目</th><th></th><th class="amt">小计(¥)</th></tr>
+${rows.filter(r=>r.type==='transport').map(r=>`<tr><td class="item">${r.day} ${r.name}</td><td class="note">${r.budget}</td><td class="amt">${r.total.toFixed(0)}</td></tr>`).join('')}
+<tr><td class="item">国际机票（两人经济舱）</td><td class="note">预估中间价</td><td class="amt">${flightEst}</td></tr>
+<tr><td class="item">租车SUV+油费+全险14天</td><td class="note">预估中间价</td><td class="amt">${carEst}</td></tr>
+<tr><td colspan="2" style="font-weight:700">交通合计</td><td class="sub">${(transTotal+flightEst+carEst).toFixed(0)}</td></tr>
+</table></div>
+
+<div class="budget-section"><h3>📋 其他固定费用</h3>
+<table class="budget-table">
+<tr><th>项目</th><th></th><th class="amt">小计(¥)</th></tr>
+<tr><td class="item">签证（两人）</td><td class="note">新西兰电子签</td><td class="amt">${visaEst}</td></tr>
+<tr><td class="item">旅行保险（两人）</td><td class="note">建议购买</td><td class="amt">${insurance}</td></tr>
+<tr><td class="item">停车/过路/纪念品/零食</td><td class="note">预估</td><td class="amt">${miscEst}</td></tr>
+</table></div>
+
+<div class="budget-section"><h3 style="font-size:22px;color:var(--tint-red)">🧾 总预算</h3>
+<table class="budget-table">
+<tr class="total-row"><td class="item">住宿</td><td></td><td class="amt">${hotelTotal.toFixed(0)}</td></tr>
+<tr class="total-row"><td class="item">活动</td><td></td><td class="amt">${actTotal.toFixed(0)}</td></tr>
+<tr class="total-row"><td class="item">餐饮</td><td></td><td class="amt">${foodTotal.toFixed(0)}</td></tr>
+<tr class="total-row"><td class="item">交通（含机票租车）</td><td></td><td class="amt">${(transTotal+flightEst+carEst).toFixed(0)}</td></tr>
+<tr class="total-row"><td class="item">其他（签证保险杂项）</td><td></td><td class="amt">${(visaEst+insurance+miscEst).toFixed(0)}</td></tr>
+<tr style="border-top:3px solid var(--text-primary)"><td style="font-size:20px;font-weight:800;padding:14px 8px">💰 两人总计</td><td></td><td class="amt" style="font-size:22px;font-weight:800;color:var(--tint-red);padding:14px 8px">¥${grandTotal.toFixed(0)}</td></tr>
+<tr><td colspan="3" style="text-align:center;padding:12px 8px;font-size:13px;color:var(--text-secondary)">📍 按中位价格估算 · 实际出行可能上下浮动¥0.8-1.5万</td></tr>
+</table></div>
+<div class="pay-summary">
+  <h4>💡 省钱弹性空间</h4>
+  <p>⬇️ 住宿降到舒适型（¥800-1200/晚）→ 省约 <strong>¥10,000+</strong></p>
+  <p>⬇️ 冰川直升机改半程徒步团 → 省约 <strong>¥5,000</strong></p>
+  <p>⬆️ 加跳伞/蹦极等活动 → 加 <strong>¥3,000-5,000</strong></p>
+</div>`;
+}
+
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  ENGINE — Do not modify below unless customizing behavior   ║
-// ╚══════════════════════════════════════════════════════════════╝
 
 const map = L.map('map', { center: [HOTEL.lat || 35.69, HOTEL.lng || 139.74], zoom: 12, zoomControl: false, attributionControl: true });
 L.control.zoom({ position: 'topright' }).addTo(map);
@@ -555,8 +663,13 @@ DAYS.forEach(d => {
 function go(idx) {
   cur = idx;
   tabsEl.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', +t.dataset.day===idx));
-  contentEl.innerHTML = idx===0 ? overviewContent() : renderDay(idx);
-  showDay(idx);
+  if (idx === 15) {
+    contentEl.innerHTML = budgetContent();
+    clearMap();
+  } else {
+    contentEl.innerHTML = idx===0 ? overviewContent() : renderDay(idx);
+    showDay(idx);
+  }
   contentEl.scrollTo({top:0});
   const tab = tabsEl.querySelector(`[data-day="${idx}"]`);
   if(tab) tab.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'});
